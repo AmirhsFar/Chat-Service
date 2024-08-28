@@ -1,14 +1,17 @@
 from datetime import datetime, time, timedelta
 from uuid import UUID
-from typing import Optional
+from typing import Optional, Literal
 from enum import Enum
 from fastapi import (FastAPI,
                      Query,
                      Path,
-                     Body)
+                     Body,
+                     Cookie,
+                     Header)
 from pydantic import (BaseModel,
                       Field,
-                      HttpUrl)
+                      HttpUrl,
+                      EmailStr)
 
 
 app1 = FastAPI()
@@ -193,12 +196,51 @@ class User(BaseModel):
     height: int
 
 
+class UserBase(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str | None = None
+
+
+class UserIn(UserBase):
+    password: str
+
+
+class UserOut(UserBase):
+    pass
+
+
 class Book(BaseModel):
     name: str
     description: str | None = Field(None, title='The description of the book', max_length=300)
     price: float = Field(..., gt=0, description='The price must be greater than zero.')
     tax: float | None = None
 
+
+class Itemm(BaseModel):
+    name: str
+    description: str | None = None
+    price: float
+    tax: float = 10.5
+    tags: list[str] = []
+
+
+items = {
+    "foo": {"name": "Foo", "price": 50.2},
+    "bar": {
+        "name": "Bar",
+        "description": "The bartenders",
+        "price": 62,
+        "tax": 20.2
+    },
+    "baz": {
+        "name": "Baz",
+        "description": None,
+        "price": 50.2,
+        "tax": 10.5,
+        "tags": []
+    }
+}
 
 @app2.post('/create_user')
 async def create_user(
@@ -308,3 +350,47 @@ async def read_users(
         "start_process": start_process,
         "duration": duration
         }
+
+@app2.get('/items')
+async def read_items(
+    cookie_id: str | None = Cookie(None),
+    accept_encoding: str | None = Header(None),
+    sec_ch_ua: str | None = Header(None),
+    user_agent: str | None = Header(None),
+    x_token: list[str] | None = Header(None)
+                            ):
+    return {
+        'Cookie_id': cookie_id,
+        'Accept-Encoding': accept_encoding,
+        'sec-ch-ua': sec_ch_ua,
+        'user_agent': user_agent,
+        'X-Token values': x_token
+        }
+
+@app2.post('/user', response_model=UserOut)
+async def create_user(user: UserIn):
+    return user
+
+@app2.get(
+        '/itemms/{item_id}',
+        response_model=Itemm,
+        response_model_exclude_unset=True
+        )
+async def read_item(item_id: Literal["foo", "bar", "baz"]):
+    return items[item_id]
+
+@app2.get(
+        '/itemms/{item_id}/name',
+        response_model=Itemm,
+        response_model_include={"name", "description"}
+        )
+async def read_item_name(item_id: Literal["foo", "bar", "baz"]):
+    return items[item_id]
+
+@app2.get(
+        '/itemms/{item_id}/public',
+        response_model=Itemm,
+        response_model_exclude={"tax"}
+        )
+async def read_item_public_data(item_id: Literal["foo", "bar", "baz"]):
+    return items[item_id]
