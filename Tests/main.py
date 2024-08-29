@@ -1,13 +1,18 @@
 from datetime import datetime, time, timedelta
 from uuid import UUID
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 from enum import Enum
 from fastapi import (FastAPI,
                      Query,
                      Path,
                      Body,
                      Cookie,
-                     Header)
+                     Header,
+                     Form,
+                     File,
+                     responses,
+                     UploadFile,
+                     status)
 from pydantic import (BaseModel,
                       Field,
                       HttpUrl,
@@ -16,6 +21,7 @@ from pydantic import (BaseModel,
 
 app1 = FastAPI()
 app2 = FastAPI()
+app3 = FastAPI()
 
 
 '''
@@ -185,8 +191,9 @@ async def read_items_validation(
     
     return results
 
+
 '''
-    Part 2: Multiple Parameters
+    Part 2: Multiple Parameters & Response Body
 '''
 
 
@@ -194,6 +201,11 @@ class User(BaseModel):
     username: str
     full_name: str | None = None
     height: int
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
 
 
 class UserBase(BaseModel):
@@ -204,6 +216,10 @@ class UserBase(BaseModel):
 
 class UserIn(UserBase):
     password: str
+
+
+class UserInDB(UserBase):
+    hashed_password: str
 
 
 class UserOut(UserBase):
@@ -225,6 +241,25 @@ class Itemm(BaseModel):
     tags: list[str] = []
 
 
+class BaseItem(BaseModel):
+    description: str
+    type: str
+
+
+class CarItem(BaseItem):
+    type: str = 'car'
+
+
+class PlaneItem(BaseItem):
+    type: str = 'plane'
+    size: int
+
+
+class ListItem(BaseModel):
+    name: str
+    description: str
+
+
 items = {
     "foo": {"name": "Foo", "price": 50.2},
     "bar": {
@@ -241,6 +276,23 @@ items = {
         "tags": []
     }
 }
+
+itemms = {
+    'item1': {
+        'description': 'All my friends drive a low rider',
+        'type': 'car'
+    },
+    'item2': {
+        'description': 'Music is my aeroplane',
+        'type': 'plane',
+        'size': 5
+    }
+}
+
+list_items = [
+    {"name": "Foo", "description": "There comes my hero"},
+    {"name": "Red", "description": "It's my aeroplane"}
+]
 
 @app2.post('/create_user')
 async def create_user(
@@ -394,3 +446,105 @@ async def read_item_name(item_id: Literal["foo", "bar", "baz"]):
         )
 async def read_item_public_data(item_id: Literal["foo", "bar", "baz"]):
     return items[item_id]
+
+
+'''
+    Part 3: Models & More
+'''
+
+def fake_password_hasher(raw_password: str):
+    return f"supersecret{raw_password}"
+
+def fake_save_user(user_in: UserIn):
+    hashed_password = fake_password_hasher(user_in.password)
+    user_in_db = UserInDB(**user_in.model_dump(), hashed_password=hashed_password)
+    print("User 'saved'.")
+
+    return user_in_db
+
+@app3.post("/user/", response_model=UserOut)
+async def create_user(user_in: UserIn):
+    user_saved = fake_save_user(user_in)
+
+    return user_saved
+
+@app3.get('/items/{item_id}', response_model=Union[PlaneItem, CarItem])
+async def read_item(item_id: Literal['item1', 'item2']):
+    return itemms[item_id]
+
+@app3.post('/items', status_code=status.HTTP_201_CREATED)
+async def create_item(name: str):
+    return {'name': name}
+
+@app3.delete('/item/{pk}', status_code=204)
+async def delete_item(pk: str):
+    print('pk', pk)
+
+    return pk
+
+@app3.get('/items', status_code=301)
+async def read_items_redirect():
+    return {"hello": "world"}
+
+@app3.post('/login_no_form')
+async def login_without_using_form(user: UserLogin):
+    return user
+
+@app3.post('/login_form')
+async def login_with_using_form(
+    username: str = Form(...),
+    password: str = Form(...)
+    ):
+    print('password:', password)
+
+    return {'username': username}
+
+@app3.post('/files')
+async def create_file(files: list[bytes] = File(
+                                        NotImplementedError,
+                                        description='A file read as bytes'
+                                    )):
+    if not files:
+
+        return {'message': 'No files sent'}
+
+    return {'files_sizes': [len(file) for file in files]}
+
+@app3.post('/uploadfile')
+async def create_upload_file(file: UploadFile = File(
+                                        None,
+                                        description='A file read as upload file'
+                                    )):
+    if not file:
+
+        return {'message': 'No upload file sent'}
+
+    return {'filename': file.filename}
+
+@app3.post('/uploadfiles')
+async def create_upload_file(files: list[UploadFile] = File(
+                                        None,
+                                        description='Files read as upload file'
+                                    )):
+    if not files:
+
+        return {'message': 'No upload files sent'}
+
+    return {'filenames': [file.filename for file in files]}
+
+@app3.get('/')
+async def main():
+    content = '''
+                <body>
+                <form action="/files" enctype="multipart/form-data" method="post">
+                <input name="files" type="file" multiple>
+                <input type="submit">
+                </form>
+                <form action="/uploadfiles" enctype="multipart/form-data" method="post">
+                <input name="files" type="file" multiple>
+                <input type="submit">
+                </form>
+                </body>
+            '''
+    
+    return responses.HTMLResponse(content=content)
