@@ -22,6 +22,7 @@ from pydantic import (BaseModel,
 app1 = FastAPI()
 app2 = FastAPI()
 app3 = FastAPI()
+app4 = FastAPI()
 
 
 '''
