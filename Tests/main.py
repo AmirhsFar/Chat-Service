@@ -10,9 +10,15 @@ from fastapi import (FastAPI,
                      Header,
                      Form,
                      File,
+                     Depends,
+                     exception_handlers,
                      responses,
                      UploadFile,
-                     status)
+                     status,
+                     HTTPException,
+                     Request,
+                     exceptions,
+                     encoders)
 from pydantic import (BaseModel,
                       Field,
                       HttpUrl,
@@ -149,19 +155,38 @@ async def create_item(item: Item) -> dict:
     return item_dict
 
 @app1.put('/items/{item_id}')
-async def create_item_with_put(item_id: int, item: Item, q: str | None = None):
+async def create_item_with_put(
+    item_id: int,
+    item: Item,
+    q: str | None = None
+    ):
     result = {'item_id': item_id, **item.model_dump()}
     if q:
         result.update({'q': q})
 
     return result
 
-# if you replace 'fixedquery' parameter with ... in Query(), the q query parameter becomes mandatory
+# if you replace 'fixedquery' parameter with ... in Query(),
+# the q query parameter becomes mandatory
 @app1.put('/items')
 async def read_items(
-    q: str = Query('fixedquery', min_length=3, max_length=10, regex='^fixedquery$'),
-    d: list[str] = Query(['foo', 'bar'], deprecated=True, alias='item-query'),
-    s: str = Query('None', min_length=4, title='sample query string', description='forgotten')
+    q: str = Query(
+        'fixedquery',
+        min_length=3,
+        max_length=10,
+        regex='^fixedquery$'
+        ),
+    d: list[str] = Query(
+        ['foo', 'bar'],
+        deprecated=True,
+        alias='item-query'
+        ),
+    s: str = Query(
+        'None',
+        min_length=4,
+        title='sample query string',
+        description='forgotten'
+        )
                             ):
     results = {'items': [{'item_name': 'Foo'}, {'item_name': 'Bar'}]}
     if q:
@@ -229,8 +254,16 @@ class UserOut(UserBase):
 
 class Book(BaseModel):
     name: str
-    description: str | None = Field(None, title='The description of the book', max_length=300)
-    price: float = Field(..., gt=0, description='The price must be greater than zero.')
+    description: str | None = Field(
+        None,
+        title='The description of the book',
+        max_length=300
+        )
+    price: float = Field(
+        ...,
+        gt=0,
+        description='The price must be greater than zero.'
+        )
     tax: float | None = None
 
 
@@ -311,7 +344,8 @@ async def post_user(
     user: User = Body(..., openapi_examples={
         "normal": {
             "summary": "A normal correct example",
-            "description": "This *is* a __normal__ example **that** raises _no_ errors",
+            "description": """This *is* a __normal__ 
+                                example **that** raises _no_ errors""",
             "value": {
                 "username": "AmirhsFar",
                 "full_name": "Amirhossein Farahani",
@@ -320,7 +354,8 @@ async def post_user(
         },
         "converted": {
             "summary": "An example with converted data",
-            "description": "FastAPI can convert `string` type height to an `integer` one",
+            "description": """FastAPI can convert `string`
+                                    type height to an `integer` one""",
             "value": {
                 "username": "AmirhsFar",
                 "full_name": "Amirhossein Farahani",
@@ -340,7 +375,8 @@ async def post_user(
                             ):
     return {"user_id": user_id, "user": user}
 
-# In the case you have -item- as your only query parameter, embed=True forces you to input {'item': {}}
+# In the case you have -item- as your only query parameter,
+# embed=True forces you to input {'item': {}}
 @app2.put('/items/{item_id}')
 async def update_item(
     *, item_id: int = Path(..., title='The ID of the item to get', ge=0, le=150),
@@ -450,7 +486,7 @@ async def read_item_public_data(item_id: Literal["foo", "bar", "baz"]):
 
 
 '''
-    Part 3: Models & More
+    Part 3: Models, Status Codes and Request Files
 '''
 
 def fake_password_hasher(raw_password: str):
@@ -563,3 +599,213 @@ async def create_file(
         "fileb_content_type": fileb.content_type,
         "hello": hello
     }
+
+
+'''
+    Part 4: Error Handling, APIs' Documentation, JSON Encoder & Dependencies (Intro)
+'''
+
+
+class Tags(Enum):
+    items = 'items'
+    users = 'users'
+    instances = 'instances'
+
+
+class Ittem(BaseModel):
+    title: str
+    size: int
+
+
+class Instance(BaseModel):
+    name: str
+    description: str | None = None
+    price: float | None = None
+    tax: float = 10.5
+    tags: list[str] = []
+
+
+class UnicornException(Exception):
+    def __init__(self, name: str):
+        self.name = name
+
+
+instances = {
+    'Foo': {
+        'name': "Foo",
+        'price': 50.2
+    },
+    'Bar': {
+        'name': "Bar",
+        'description': "The bartenders",
+        'price': 62,
+        'tax': 20.2
+    },
+    'Baz': {
+        'name': "Baz",
+        'description': None,
+        'price': 59.2,
+        'tax': 10.5,
+        'tags': []
+    }
+}
+
+ittems = {"foo": "The Foo Wrestlers"}
+
+@app4.get('/items/{item_id}')
+async def read_item(item_id: str):
+    if item_id not in ittems:
+        raise HTTPException(
+            status_code=404,
+            detail="Item not found",
+            headers={"X-Error": "There goes my error"}
+        )
+    
+    return {"item": ittems[item_id]}
+
+@app4.exception_handler(UnicornException)
+async def unicorn_exception_handler(request: Request, exc: UnicornException):
+    return responses.JSONResponse(
+        status_code=418,
+        content={"message": f"Oops! {exc.name} did something."}
+    )
+
+@app4.get("/unicorns/{name}")
+async def read_unicorns(name: str):
+    if name == "Yolo":
+        raise UnicornException(name=name)
+    
+    return {"unicorn_name": name}
+
+'''
+@app4.exception_handler(exceptions.RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return responses.PlainTextResponse(str(exc), status_code=400)
+'''
+
+'''
+@app4.exception_handler(exceptions.RequestValidationError)
+async def validation_exception_handler(request: Request, exc: exceptions.RequestValidationError):
+    return responses.JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=encoders.jsonable_encoder({"detail": exc.errors(), "body": exc.body})
+    )
+'''
+
+'''
+@app4.exception_handler(exceptions.StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    return responses.PlainTextResponse(str(exc.detail), status_code=exc.status_code)
+'''
+
+@app4.exception_handler(exceptions.StarletteHTTPException)
+async def custom_http_exception_handler(request, exc):
+    print(f"OMG! An HTTP error!: {repr(exc)}")
+
+    return await exception_handlers.http_exception_handler(request, exc)
+
+@app4.exception_handler(exceptions.RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print(f"OMG! The client sent invalid data!: {exc}")
+
+    return await exception_handlers.request_validation_exception_handler(request, exc)
+
+@app4.get('/validation_items/{item_id}')
+async def read_validation_items(item_id: int):
+    if item_id == 3:
+        raise HTTPException(status_code=418, detail="Nope! I don't like 3!")
+    
+    return {"item_id": item_id}
+
+@app4.get('/blah_items/{item_id}')
+async def read_items(item_id: int):
+    if item_id == 3:
+        raise HTTPException(
+            status_code=418,
+            detail="Nope! I don't like 3"
+        )
+    
+    return {'item_id': item_id}
+
+@app4.post(
+        '/items',
+        response_model=Item,
+        status_code=status.HTTP_201_CREATED,
+        tags=[Tags.items],
+        summary='Create an Item',
+        response_description='The created item'
+        # description='''Create an Item with all the information: 
+        #                     name, description, price, tax, and a set of tags'''
+    )
+async def create_item(item: Item):
+    """
+    Create an item with all the information:
+
+    - **name**: each item must have a name
+    - **description**: a long description
+    - **price**: required
+    - **tax**: if the item doesn't have tax, you can omit this
+    - **tags**: a set of unique tag strings for this item
+    """
+    return item
+
+@app4.get('/items', tags=[Tags.items], deprecated=True)
+async def read_items():
+    return [{'name': 'Foo', 'price': 42}]
+
+@app4.get('/users', tags=[Tags.users])
+async def read_users():
+    return [{'username': 'PhoebeBuffay'}]
+
+@app4.put('/instances/{instance_id}', tags=[Tags.instances])
+def update_instance(instance_id: str, instance: Instance):
+    update_instance_encoded = encoders.jsonable_encoder(instance)
+    instances[instance_id] = update_instance_encoded
+
+    return update_instance_encoded
+
+@app4.get(
+        '/instances/{instance_id}',
+        response_model=Instance,
+        tags=[Tags.instances]
+    )
+async def read_instance(instance_id: str):
+    return instances.get(instance_id)
+
+@app4.patch(
+        '/instances/{instance_id}',
+        response_model=Instance,
+        tags=[Tags.instances]
+    )
+def patch_instance(instance_id: str, instance: Instance):
+    stored_instance_data = instances.get(instance_id)
+    if stored_instance_data is not None:
+        stored_instance_model = Instance(**stored_instance_data)
+    else:
+        stored_instance_model = Instance(name=instance_id)
+    update_data = instance.model_dump(exclude_unset=True)
+    print(update_data)
+    updated_instance = stored_instance_model.model_copy(update=update_data)
+    instances[instance_id] = encoders.jsonable_encoder(updated_instance)
+    print(instances[instance_id])
+
+    return updated_instance
+
+async def hello():
+    return 'world'
+
+async def common_paramteres(
+        q: str | None = None,
+        skip: int = 0,
+        limit: int = 100,
+        blah: str = Depends(hello)
+    ):
+    return {'q': q, 'skip': skip, 'limit': limit, 'hello': blah}
+
+@app4.get('/books')
+async def read_books(commons: dict = Depends(common_paramteres)):
+    return commons
+
+@app4.get('/ussers')
+async def read_ussers(commons: dict = Depends(common_paramteres)):
+    return commons
