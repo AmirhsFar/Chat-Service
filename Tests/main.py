@@ -29,6 +29,7 @@ app1 = FastAPI()
 app2 = FastAPI()
 app3 = FastAPI()
 app4 = FastAPI()
+app5 = FastAPI()
 
 
 '''
@@ -809,3 +810,77 @@ async def read_books(commons: dict = Depends(common_paramteres)):
 @app4.get('/ussers')
 async def read_ussers(commons: dict = Depends(common_paramteres)):
     return commons
+
+
+'''
+    Part 5: Dependencies
+'''
+
+
+class CommonQueryParams:
+    def __init__(
+            self,
+            instance_id: int,
+            q: str | None = None,
+            skip: int = 0,
+            limit: int = 100
+        ):
+        self.instance_id = instance_id
+        self.q = q
+        self.skip = skip
+        self.limit = limit
+
+
+fake_instances_db = [
+    {'instance_name': 'Foo'},
+    {'instance_name': 'Bar'},
+    {'instance_name': 'Baz'}
+]
+
+@app5.get('/instances/{instance_id}')
+async def read_items(commons: CommonQueryParams=Depends()):
+    response = {}
+    response.update({'instance_id': commons.instance_id})
+    if commons.q:
+        response.update({'q': commons.q})
+    instances = fake_instances_db[commons.skip: commons.skip+commons.limit]
+    response.update({'instances': instances})
+
+    return response
+
+def query_extractor(q: str | None = None):
+    return q
+
+def query_or_body_extractor(
+        q: str = Depends(query_extractor),
+        last_query: str | None = Body(None)
+    ):
+    if q:
+
+        return q
+
+    return last_query
+    
+@app5.post('/item')
+async def try_query(query_or_body: str = Depends(query_or_body_extractor)):
+    return {'q_or_body': query_or_body}
+
+async def verify_token(x_token: str = Header(...)):
+    if x_token != "fake-super-secret-token":
+        raise HTTPException(status_code=400, detail="X-Token header invalid")
+
+async def verify_key(x_key: str = Header(...)):
+    if x_key != 'fake-super-secret-key':
+        raise HTTPException(status_code=400, detail='X-key header invalid')
+
+    return x_key
+
+dependency_app = FastAPI(dependencies=[Depends(verify_token), Depends(verify_key)])
+
+@dependency_app.get('/items')
+async def read_items():
+    return [{'item': 'Foo'}, {'item': 'Bar'}]
+
+@dependency_app.get('/users')
+async def read_users():
+    return [{'username': 'Rick'}, {'username': 'Morty'}]
