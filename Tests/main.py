@@ -1,9 +1,11 @@
 from datetime import datetime, time, timedelta
+import time as Time
 from uuid import UUID
 from typing import Optional, Literal, Union
 from enum import Enum
 from jose import jwt, JWTError
 from passlib import context
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import (FastAPI,
                      Query,
                      Path,
@@ -13,6 +15,7 @@ from fastapi import (FastAPI,
                      Form,
                      File,
                      Depends,
+                     middleware,
                      security,
                      exception_handlers,
                      responses,
@@ -26,7 +29,7 @@ from pydantic import (BaseModel,
                       Field,
                       HttpUrl,
                       EmailStr)
-
+from starlette import middleware as Middleware
 
 app1 = FastAPI()
 app2 = FastAPI()
@@ -824,7 +827,7 @@ async def read_ussers(commons: dict = Depends(common_paramteres)):
 
 
 '''
-    Part 5: Dependencies, Security (OAuth2 & JWT)
+    Part 5: Dependencies, Security (OAuth2 & JWT), Middleware & CORS
 '''
 
 
@@ -860,6 +863,16 @@ class TokenUser(BaseModel):
 
 class TokenUserInDB(TokenUser):
     hashed_password: str
+
+
+class MyMiddleware(Middleware.base.BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = Time.time()
+        response = await call_next(request)
+        process_time = Time.time() - start_time
+        response.headers['X-Process-Time'] = str(process_time)
+
+        return response
 
 
 fake_users_db = {
@@ -1085,3 +1098,13 @@ async def get_me(current_user: TokenUser = Depends(get_current_active_user_jwt))
 @app5.get('/users/me/items')
 async def read_own_items(current_user: TokenUser = Depends(get_current_active_user_jwt)):
     return [{'item_id': 'Foo', 'owner': current_user.username}]
+
+origins = [
+    '*'
+]
+app5.add_middleware(MyMiddleware)
+app5.add_middleware(CORSMiddleware, allow_origins=origins)
+
+@app5.get('/blah')
+async def blah():
+    return {'hello': 'world'}
