@@ -8,3 +8,8 @@ SQLAlchemy
 motor
 pytest
 httpx
+python-socketio[asyncio]
+python-engineio
+websockets
+redis
+aioredis
