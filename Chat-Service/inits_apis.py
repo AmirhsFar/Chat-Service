@@ -20,17 +20,20 @@ from schemas import (
     TokenData,
     Token,
     ChatRoomCreate,
-    ChatRoomModel
+    ChatRoomShow,
+    JoinRequestCreate,
+    JoinRequestShow
 )
 from operations import (
     create_user,
     get_user_by_email,
     get_user_by_username,
     create_chat_room,
-    get_user_chat_rooms
+    get_user_chat_rooms,
+    get_chat_room,
+    create_join_request
 )
 from utils import (
-    get_password_hash,
     verify_password,
     create_access_token,
     SECRET_KEY,
@@ -85,10 +88,14 @@ async def signup(user: UserCreate):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User with this email already exists"
             )
+        existing_user = await get_user_by_username(user.username)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User with this username already exists"
+            )
         
-        hashed_password = get_password_hash(user.password)
         user_dict = user.model_dump()
-        user_dict["password"] = hashed_password
         new_user = await create_user(UserCreate(**user_dict))
         logger.info(f"New user created: {new_user.email}")
 
@@ -107,7 +114,9 @@ async def signup(user: UserCreate):
     #     ) from e
 
 @router.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends()
+):
     user = await get_user_by_email(form_data.username) or await get_user_by_username(form_data.username)
     if not user or not verify_password(form_data.password, user.password):
         raise HTTPException(
@@ -117,24 +126,36 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"email": user.email, "username": user.username}, expires_delta=access_token_expires
+        data={"email": user.email, "username": user.username},
+        expires_delta=access_token_expires
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
 
 # @router.post("/logout")
-# async def logout(current_user: UserModel = Depends(get_current_user), token: str = Depends(oauth2_scheme)):
+# async def logout(
+#     current_user: UserModel = Depends(get_current_user),
+#     token: str = Depends(oauth2_scheme)
+# ):
 #     redis = await get_redis()
-#     await redis.set(f"blacklisted_token:{token}", "true", ex=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+#     await redis.set(
+#         f"blacklisted_token:{token}", "true",
+#         ex=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+#     )
 #     logger.info(f"User logged out: {current_user.email}")
 
 #     return {"message": "Successfully logged out"}
 
-@router.post("/chat_rooms", response_model=ChatRoomModel)
-async def create_new_chat_room(chat_room: ChatRoomCreate, current_user: UserModel = Depends(get_current_user)):
+@router.post("/chat_rooms", response_model=ChatRoomShow)
+async def create_new_chat_room(
+    chat_room: ChatRoomCreate,
+    current_user: UserModel = Depends(get_current_user)
+):
     try:
         new_chat_room = await create_chat_room(chat_room, current_user.id)
-        logger.info(f"New chat room created: {new_chat_room.name} by user: {current_user.email}")
+        logger.info(
+            f"New chat room created: {new_chat_room.name} by user: {current_user.email}"
+        )
 
         return new_chat_room
     except Exception as e:
@@ -144,7 +165,7 @@ async def create_new_chat_room(chat_room: ChatRoomCreate, current_user: UserMode
             detail="An error occurred while creating the chat room"
         ) from e
 
-@router.get("/chat_rooms", response_model=list[ChatRoomModel])
+@router.get("/chat_rooms", response_model=list[ChatRoomShow])
 async def get_my_chat_rooms(current_user: UserModel = Depends(get_current_user)):
     try:
         chat_rooms = await get_user_chat_rooms(current_user.id)
@@ -155,4 +176,40 @@ async def get_my_chat_rooms(current_user: UserModel = Depends(get_current_user))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching chat rooms"
+        ) from e
+
+@router.get(
+        "/search_chat_rooms",
+        response_model=ChatRoomShow
+)
+async def search_chat_rooms(
+    chat_room_id: str, _: UserModel = Depends(get_current_user)
+):
+    chat_room = await get_chat_room(chat_room_id, is_group=True)
+    if not chat_room:
+        raise HTTPException(
+            status_code=404, detail="Chat room not found"
+        )
+    
+    return chat_room
+
+@router.post("/join_request", response_model=JoinRequestShow)
+async def submit_join_request(
+    join_request: JoinRequestCreate,
+    current_user: UserModel = Depends(get_current_user)
+):
+    try:
+        new_join_request = await create_join_request(
+            join_request, current_user.id
+        )
+        logger.info(
+            f"New join request submitted by user: {current_user.email}"
+        )
+
+        return new_join_request
+    except Exception as e:
+        logger.error(f"Error submitting join request: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while submitting the join"
         ) from e

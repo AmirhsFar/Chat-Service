@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from database import db
 from inits_apis import router as inits_router
+from admin_apis import router as admin_router
 # from redis_config import (
 #     init_redis_pool,
 #     get_redis
@@ -21,4 +22,7 @@ async def lifespan(_: FastAPI):
 chat_service_app = FastAPI(lifespan=lifespan)
 chat_service_app.include_router(
     inits_router, tags=["inits"]
+)
+chat_service_app.include_router(
+    admin_router, prefix='/admin', tags=['admin panel']
 )
