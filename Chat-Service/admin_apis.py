@@ -12,7 +12,8 @@ from schemas import (
     UserUpdate,
     ChatRoomShow,
     ChatRoomUpdate,
-    JoinRequestShow
+    JoinRequestShow,
+    ChatRoomSessionShow
 )
 from operations import (
     get_user_by_username, get_user_by_email,
@@ -21,7 +22,8 @@ from operations import (
     delete_user, get_all_chat_rooms,
     get_chat_room, create_chat_room,
     update_chat_room, delete_chat_room,
-    get_all_join_requests
+    get_all_join_requests, get_all_chat_room_sessions,
+    delete_join_request, delete_chat_room_session
 )
 from inits_apis import get_current_user
 
@@ -176,3 +178,36 @@ async def admin_get_all_join_requests(
     _: UserModel = Depends(get_current_admin_user)
 ):
     return await get_all_join_requests()
+
+@router.get("/chat-room-sessions", response_model=list[ChatRoomSessionShow])
+async def admin_get_all_chat_room_sessions(
+    _: UserModel = Depends(get_current_admin_user)
+):
+    return await get_all_chat_room_sessions()
+
+@router.delete(
+        "/chat-room-sessions/{chat_room_session_id}",
+        status_code=status.HTTP_204_NO_CONTENT
+)
+async def admin_delete_chat_room_session(
+    chat_room_session_id: str,
+    _: UserModel = Depends(get_current_admin_user)
+):
+    deleted = await delete_chat_room_session(chat_room_session_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=404, detail="Chat room session not found"
+        )
+
+@router.delete(
+        "/join-requests/{join_request_id}",
+        status_code=status.HTTP_204_NO_CONTENT
+)
+async def admin_delete_join_request(
+    join_request_id: str, _: UserModel = Depends(get_current_admin_user)
+):
+    deleted = await delete_join_request(join_request_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=404, detail="Join request not found"
+        )

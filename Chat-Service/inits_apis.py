@@ -1,5 +1,7 @@
 import logging
 from datetime import timedelta
+from database import db
+from bson import ObjectId
 from jose import (
     JWTError,
     jwt
@@ -8,7 +10,8 @@ from fastapi import (
     APIRouter,
     HTTPException,
     status,
-    Depends
+    Depends,
+    Body
 )
 from fastapi.security import (
     OAuth2PasswordRequestForm,
@@ -19,7 +22,7 @@ from schemas import (
     UserModel,
     TokenData,
     Token,
-    ChatRoomCreate,
+    ChatRoomUpdate,
     ChatRoomShow,
     JoinRequestCreate,
     JoinRequestShow
@@ -31,7 +34,11 @@ from operations import (
     create_chat_room,
     get_user_chat_rooms,
     get_chat_room,
-    create_join_request
+    create_join_request,
+    get_chat_room_details,
+    delete_chat_room,
+    get_join_request,
+    handle_request
 )
 from utils import (
     verify_password,
@@ -146,15 +153,16 @@ async def login_for_access_token(
 
 #     return {"message": "Successfully logged out"}
 
-@router.post("/chat_rooms", response_model=ChatRoomShow)
+@router.post("/chat-rooms")
 async def create_new_chat_room(
-    chat_room: ChatRoomCreate,
+    chat_room: ChatRoomUpdate,
     current_user: UserModel = Depends(get_current_user)
 ):
     try:
         new_chat_room = await create_chat_room(chat_room, current_user.id)
+        chat_room_dict = chat_room.model_dump()
         logger.info(
-            f"New chat room created: {new_chat_room.name} by user: {current_user.email}"
+            f"New chat room created: {chat_room_dict['name']} by user: {current_user.email}"
         )
 
         return new_chat_room
@@ -165,7 +173,7 @@ async def create_new_chat_room(
             detail="An error occurred while creating the chat room"
         ) from e
 
-@router.get("/chat_rooms", response_model=list[ChatRoomShow])
+@router.get("/chat-rooms", response_model=list[ChatRoomShow])
 async def get_my_chat_rooms(current_user: UserModel = Depends(get_current_user)):
     try:
         chat_rooms = await get_user_chat_rooms(current_user.id)
@@ -179,7 +187,7 @@ async def get_my_chat_rooms(current_user: UserModel = Depends(get_current_user))
         ) from e
 
 @router.get(
-        "/search_chat_rooms",
+        "/search-chat-rooms",
         response_model=ChatRoomShow
 )
 async def search_chat_rooms(
@@ -193,23 +201,121 @@ async def search_chat_rooms(
     
     return chat_room
 
-@router.post("/join_request", response_model=JoinRequestShow)
+@router.post("/join-request", response_model=JoinRequestShow)
 async def submit_join_request(
     join_request: JoinRequestCreate,
     current_user: UserModel = Depends(get_current_user)
 ):
-    try:
-        new_join_request = await create_join_request(
-            join_request, current_user.id
+    new_join_request = await create_join_request(
+        join_request, current_user.id
+    )
+    logger.info(
+        f"New join request submitted by user: {current_user.email}"
+    )
+
+    return new_join_request
+
+@router.get('/chat-room-details')
+async def my_chat_room_details(
+    chat_room_id: str, current_user: UserModel = Depends(get_current_user)
+):
+    chat_room = await db.get_db().chat_rooms.find_one({
+        '_id': ObjectId(chat_room_id), 'owner': ObjectId(current_user.id)
+    })
+    if not chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You are not allowed to see other users' chat rooms"
         )
-        logger.info(
-            f"New join request submitted by user: {current_user.email}"
+    
+    return await get_chat_room_details(chat_room_id)
+
+@router.delete('/delete-chat-room', status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_chat_room(
+    chat_room_id: str, current_user: UserModel = Depends(get_current_user)
+):
+    my_chat_room = await db.get_db().chat_rooms.find_one({
+        '_id': ObjectId(chat_room_id), 'owner': ObjectId(current_user.id)
+    })
+    chat_room = await db.get_db().chat_rooms.find_one({
+        '_id': ObjectId(chat_room_id)
+    })
+    if not my_chat_room and chat_room:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You are not allowed to delete other users' chat rooms"
         )
 
-        return new_join_request
-    except Exception as e:
-        logger.error(f"Error submitting join request: {str(e)}")
+    deleted = await delete_chat_room(chat_room_id)
+    if not deleted:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while submitting the join"
+            status_code=404, detail="Chat room not found"
+        )
+
+@router.get('/join-request-details', response_model=JoinRequestShow)
+async def get_join_request_details(
+    join_request_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    try:
+        join_request = await db.get_db().join_requests.find_one({
+            '_id': ObjectId(join_request_id)
+        })
+        requested_chat_room = await db.get_db().chat_rooms.find_one({
+            '_id': join_request['chat_room_id']
+        })
+        requested_chat_room_owner = await db.get_db().users.find_one({
+            '_id': requested_chat_room['owner']
+        })
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Join request not found'
         ) from e
+    
+    if current_user.id != str(requested_chat_room_owner['_id']):
+        message = "You are not allowed to access "
+        message += "the request details of other users' chat rooms"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=message
+        )
+
+    return await get_join_request(join_request_id)
+
+@router.post('/handle-join-request')
+async def handle_join_request(
+    join_request_id: str = Body(...), approval_status: bool = Body(...),
+    current_user: UserModel = Depends(get_current_user)
+):
+    try:
+        join_request = await db.get_db().join_requests.find_one({
+            '_id': ObjectId(join_request_id)
+        })
+        requested_chat_room = await db.get_db().chat_rooms.find_one({
+            '_id': join_request['chat_room_id']
+        })
+        requested_chat_room_owner = await db.get_db().users.find_one({
+            '_id': requested_chat_room['owner']
+        })
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Join request not found'
+        ) from e
+    
+    if current_user.id != str(requested_chat_room_owner['_id']):
+        message = "You are not allowed to approve the join requests "
+        message += "submitted for other users' chat rooms"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=message
+        )
+    
+    if join_request['approved'] is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This join request is handled already"
+        )
+
+    return await handle_request(join_request_id, approval_status)

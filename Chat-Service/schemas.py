@@ -163,6 +163,7 @@ class JoinRequestCreate(BaseModel):
 class JoinRequestModel(BaseModel):
     id: str = Field(alias="_id")
     message: str | None = None
+    approved: bool | None = None
     user_id: str
     chat_room_id: str
 
@@ -172,6 +173,7 @@ class JoinRequestModel(BaseModel):
             "example": {
                 "id": "60d5rgb54c4f5b5c3c7e9b1a",
                 "message": "Please approve my request",
+                "approved": True,
                 "user_id": "60d5ecb54c4f5b5c3c7e9b1b",
                 "chat_room_id": "81a5ecb54c4f5n5c3e7o9b2u"
             }
@@ -181,6 +183,7 @@ class JoinRequestModel(BaseModel):
 class JoinRequestShow(BaseModel):
     id: str = Field(alias="_id")
     message: str | None = None
+    approved: bool | None = None
     user: UserUpdate | None = None
     chat_room: ChatRoomCreate | None = None
 
@@ -190,6 +193,53 @@ class JoinRequestShow(BaseModel):
             "example": {
                 "id": "60d5rgb54c4f5b5c3c7e9b1a",
                 "message": "Please approve my request",
+                "approved": True,
+                "user": {
+                    "email": "user@example.com",
+                    "username": "johndoe"
+                },
+                "chat_room": {
+                    "name": "General Chat",
+                    "is_group": True,
+                }
+            }
+        }
+
+
+class ChatRoomSessionModel(BaseModel):
+    id: str = Field(alias="_id")
+    created_at: datetime
+    last_seen: datetime | None = None
+    user_id: str
+    chat_room_id: str
+
+    class Config:
+        populate_by_name = True
+        json_schema_extra = {
+            "example": {
+                "id": "60d5elo54c4f5s5c9u7e9b1v",
+                "created_at": "2023-06-25T12:00:00",
+                "last_seen": "2023-07-12T14:45:00",
+                "user_id": "60d5ecb54c4f5b5c3c7e9b1b",
+                "chat_room_id": "93d5ecb54l4f5b5k3b7e9p3f"
+            }
+        }
+
+
+class ChatRoomSessionShow(BaseModel):
+    id: str = Field(alias="_id")
+    created_at: datetime
+    last_seen: datetime | None = None
+    user: UserUpdate | None = None
+    chat_room: ChatRoomCreate | None = None
+
+    class Config:
+        populate_by_name = True
+        json_schema_extra = {
+            "example": {
+                "id": "60d5elo54c4f5s5c9u7e9b1v",
+                "created_at": "2023-06-25T12:00:00",
+                "last_seen": "2023-07-12T14:45:00",
                 "user": {
                     "email": "user@example.com",
                     "username": "johndoe"
