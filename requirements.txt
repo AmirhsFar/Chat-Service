@@ -9,7 +9,10 @@ motor
 pytest
 httpx
 python-socketio[asyncio]
+python-socketio[asyncio_client]
 python-engineio
 websockets
 redis
 aioredis
+fastapi-socketio
+jinja2
