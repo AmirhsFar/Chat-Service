@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from datetime import datetime
 
 
 class ItemBase(BaseModel):
@@ -26,3 +27,15 @@ class User(UserBase):
     id: str
     is_active: bool
     items: list[Item]
+
+
+class MessageModel(BaseModel):
+    id: str
+    user_id: str
+    content: str
+    timestamp: datetime
+
+    def dict_with_iso_timestamp(self):
+        d = self.model_dump()
+        d['timestamp'] = d['timestamp'].isoformat()
+        return d

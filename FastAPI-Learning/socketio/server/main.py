@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sockets import sio_app
 
 app = FastAPI()
-app.mount('/', app=sio_app)
+app.mount("/socket.io", app=sio_app)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-@app.get('/')
+@app.get('/message')
 async def home():
     return {'message': 'Hello World'}
 

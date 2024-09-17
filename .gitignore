@@ -163,3 +163,4 @@ cython_debug/
 
 # installed packages of Node.js in the socket.io test section
 FastAPI-Learning/socketio/client/node_modules/
+FastAPI-Learning/mongodb_app/client/node_modules/

@@ -9,7 +9,7 @@ sio_server = AsyncServer(
 
 sio_app = ASGIApp(
     socketio_server=sio_server,
-    socketio_path='sockets'
+    socketio_path='socket.io'
 )
 
 @sio_server.event
