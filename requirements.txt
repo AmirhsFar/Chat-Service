@@ -16,3 +16,4 @@ redis
 aioredis
 fastapi-socketio
 jinja2
+aiofiles

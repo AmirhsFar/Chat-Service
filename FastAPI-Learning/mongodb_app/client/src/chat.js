@@ -2,14 +2,48 @@ import React, { useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { Message } from "./Message";
 
-const socket = io(process.env.REACT_APP_API_URL);
+const socket = io(process.env.REACT_APP_API_URL, {
+    autoConnect: false
+});
 
-export const Chat = () => {
+export const Chat = ({ onLogout }) => {
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
     const [isConnected, setIsConnected] = useState(socket.connected);
+    const [file, setFile] = useState(null);
+    const [userInfo, setUserInfo] = useState(null);
     const messagesEndRef = useRef(null);
     const chatContainerRef = useRef(null);
+    const fileInputRef = useRef(null);
+
+    useEffect(() => {
+        const fetchUserInfo = async () => {
+            try {
+                const response = await fetch(`${process.env.REACT_APP_API_URL}/users/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setUserInfo(data);
+                    socket.auth = { token: localStorage.getItem('token') };
+                    socket.connect();
+                } else {
+                    onLogout();
+                }
+            } catch (error) {
+                console.error('Error fetching user info:', error);
+                onLogout();
+            }
+        };
+
+        fetchUserInfo();
+
+        return () => {
+            socket.disconnect();
+        };
+    }, [onLogout]);
 
     useEffect(() => {
         socket.on('connect', () => {
@@ -56,16 +90,37 @@ export const Chat = () => {
         }
     };
 
-    const sendMessage = () => {
-        if(message && message.length) {
-            socket.emit('chat', message);
+    const sendMessage = async () => {
+        if (message.trim() || file) {
+            const messageData = {
+                content: message,
+                message_type: file ? (file.type.startsWith('image/') ? 'image' : 'file') : 'text',
+                user_email: userInfo.email,
+                username: userInfo.username,
+            };
+
+            if (file) {
+                messageData.file_name = file.name;
+                messageData.file = await file.arrayBuffer();
+            }
+
+            socket.emit('chat', messageData);
+            setMessage('');
+            setFile(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
         }
-        setMessage('');
+    };
+
+    const handleFileChange = (event) => {
+        setFile(event.target.files[0]);
     };
 
     return (
         <>
             <h2>status: {isConnected ? 'connected': 'disconnected'}</h2>
+            <button onClick={onLogout}>Logout</button>
             <div 
                 ref={chatContainerRef}
                 onScroll={handleScroll}
@@ -88,11 +143,16 @@ export const Chat = () => {
                 type={'text'}
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                onKeyPress={(event) => {
+                onKeyDown={(event) => {
                     if (event.key === 'Enter') {
                         sendMessage();
                     }
                 }}
+            />
+            <input
+                type="file"
+                onChange={handleFileChange}
+                ref={fileInputRef}
             />
             <button onClick={sendMessage}>Send</button>
         </>
