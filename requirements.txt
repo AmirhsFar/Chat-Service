@@ -11,6 +11,7 @@ httpx
 python-socketio[asyncio]
 python-socketio[asyncio_client]
 python-engineio
+python-dotenv
 websockets
 redis
 aioredis

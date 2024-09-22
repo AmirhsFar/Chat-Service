@@ -14,6 +14,7 @@ export const Chat = () => {
     const [userInfo, setUserInfo] = useState(null);
     const [isGroupChat, setIsGroupChat] = useState(true);
     const [chatRoomName, setChatRoomName] = useState('');
+    const [onlineUsers, setOnlineUsers] = useState([]);
     const messagesEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -65,6 +66,11 @@ export const Chat = () => {
 
                         socketRef.current.on('join', (data) => {
                             setMessages((prevMessages) => [...prevMessages, {...data, type: 'join'}]);
+                            setOnlineUsers((prevUsers) => [...prevUsers, data.username]);
+                        });
+
+                        socketRef.current.on('leave', (data) => {
+                            setOnlineUsers((prevUsers) => prevUsers.filter(user => user !== data.username));
                         });
 
                         socketRef.current.on('chat', (data) => {
@@ -77,6 +83,10 @@ export const Chat = () => {
 
                         socketRef.current.on('more_messages', (olderMessages) => {
                             setMessages((prevMessages) => [...olderMessages.map(msg => ({...msg, type: 'chat'})), ...prevMessages]);
+                        });
+
+                        socketRef.current.on('online_users', (users) => {
+                            setOnlineUsers(users);
                         });
                     } else {
                         console.error('Chat Room ID is undefined');
@@ -156,48 +166,60 @@ export const Chat = () => {
 
     return (
         <>
-            <h1>{chatRoomName}</h1>
-            <h2>status: {isConnected ? 'connected': 'disconnected'}</h2>
-            <button onClick={handleExit}>Exit Chat Room</button>
-            <div 
-                ref={chatContainerRef}
-                onScroll={handleScroll}
-                style={{
-                    height: '500px',
-                    overflowY: 'scroll',
-                    border: 'solid black 1px',
-                    padding: '10px',
-                    marginTop: '15px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                }}
-            >
-                {messages.map((message, index) => (
-                    <Message 
-                        message={message} 
-                        key={message.id || index} 
-                        isGroupChat={isGroupChat} 
-                        currentUserId={userInfo._id} 
+            <div style={{ display: 'flex' }}>
+                <div style={{ flex: 3 }}>
+                    <h1>{chatRoomName}</h1>
+                    <h2>status: {isConnected ? 'connected': 'disconnected'}</h2>
+                    <button onClick={handleExit}>Exit Chat Room</button>
+                    <div 
+                        ref={chatContainerRef}
+                        onScroll={handleScroll}
+                        style={{
+                            height: '500px',
+                            overflowY: 'scroll',
+                            border: 'solid black 1px',
+                            padding: '10px',
+                            marginTop: '15px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                        }}
+                    >
+                        {messages.map((message, index) => (
+                            <Message 
+                                message={message} 
+                                key={message.id || index} 
+                                isGroupChat={isGroupChat} 
+                                currentUserId={userInfo._id} 
+                            />
+                        ))}
+                        <div ref={messagesEndRef} />
+                    </div>
+                    <input
+                        type={'text'}
+                        value={message}
+                        onChange={(event) => setMessage(event.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                                sendMessage();
+                            }
+                        }}
                     />
-                ))}
-                <div ref={messagesEndRef} />
+                    <input
+                        type="file"
+                        onChange={handleFileChange}
+                        ref={fileInputRef}
+                    />
+                    <button onClick={sendMessage}>Send</button>
+                </div>
+                <div style={{ flex: 1, marginLeft: '20px', borderLeft: '1px solid #ccc', paddingLeft: '20px' }}>
+                    <h3>Online Users</h3>
+                    <ul>
+                        {onlineUsers.map((user, index) => (
+                            <li key={index}>{user}</li>
+                        ))}
+                    </ul>
+                </div>
             </div>
-            <input
-                type={'text'}
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                        sendMessage();
-                    }
-                }}
-            />
-            <input
-                type="file"
-                onChange={handleFileChange}
-                ref={fileInputRef}
-            />
-            <button onClick={sendMessage}>Send</button>
         </>
     );
 };

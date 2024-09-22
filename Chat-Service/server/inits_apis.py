@@ -42,7 +42,6 @@ from operations import (
     retrieve_users_chat_rooms,
     update_user_online_status_db,
     create_pv_chat,
-    rooms_online_users,
     get_online_users_pv
 )
 from utils import (
@@ -120,7 +119,8 @@ async def signup(user: UserCreate):
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
-    user = await get_user_by_email(form_data.username) or await get_user_by_username(form_data.username)
+    user = await get_user_by_email(form_data.username) or \
+            await get_user_by_username(form_data.username)
     if not user or not verify_password(form_data.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -157,34 +157,20 @@ async def create_new_chat_room(
     chat_room: ChatRoomUpdate,
     current_user: UserModel = Depends(get_current_user)
 ):
-    try:
-        new_chat_room = await create_chat_room(chat_room, current_user.id, True)
-        chat_room_dict = chat_room.model_dump()
-        logger.info(
-            f"New chat room created: {chat_room_dict['name']} by user: {current_user.email}"
-        )
+    new_chat_room = await create_chat_room(
+        chat_room, current_user.id, True
+    )
 
-        return new_chat_room
-    except Exception as e:
-        logger.error(f"Error creating chat room: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while creating the chat room"
-        ) from e
+    return new_chat_room
 
 
 @router.get("/chat-rooms", response_model=list[ChatRoomShow])
-async def get_my_chat_rooms(current_user: UserModel = Depends(get_current_user)):
-    try:
-        chat_rooms = await get_user_chat_rooms(current_user.id)
+async def get_my_chat_rooms(
+    current_user: UserModel = Depends(get_current_user)
+):
+    chat_rooms = await get_user_chat_rooms(current_user.id)
 
-        return chat_rooms
-    except Exception as e:
-        logger.error(f"Error fetching chat rooms: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while fetching chat rooms"
-        ) from e
+    return chat_rooms
 
 
 @router.get(
@@ -194,6 +180,14 @@ async def get_my_chat_rooms(current_user: UserModel = Depends(get_current_user))
 async def search_chat_rooms(
     chat_room_id: str, _: UserModel = Depends(get_current_user)
 ):
+    try:
+        ObjectId(chat_room_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room ID"
+        ) from exc
+
     chat_room = await get_chat_room(chat_room_id, is_group=True)
     if not chat_room:
         raise HTTPException(
@@ -211,9 +205,6 @@ async def submit_join_request(
     new_join_request = await create_join_request(
         join_request, current_user.id
     )
-    logger.info(
-        f"New join request submitted by user: {current_user.email}"
-    )
 
     return new_join_request
 
@@ -222,6 +213,14 @@ async def submit_join_request(
 async def my_chat_room_details(
     chat_room_id: str, current_user: UserModel = Depends(get_current_user)
 ):
+    try:
+        ObjectId(chat_room_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room ID"
+        ) from exc
+
     chat_room = await db.get_db().chat_rooms.find_one({
         '_id': ObjectId(chat_room_id), 'owner': ObjectId(current_user.id)
     })
@@ -238,6 +237,14 @@ async def my_chat_room_details(
 async def delete_my_chat_room(
     chat_room_id: str, current_user: UserModel = Depends(get_current_user)
 ):
+    try:
+        ObjectId(chat_room_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room ID"
+        ) from exc
+
     my_chat_room = await db.get_db().chat_rooms.find_one({
         '_id': ObjectId(chat_room_id), 'owner': ObjectId(current_user.id)
     })
@@ -262,6 +269,14 @@ async def get_join_request_details(
     join_request_id: str,
     current_user: UserModel = Depends(get_current_user)
 ):
+    try:
+        ObjectId(join_request_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid join request ID"
+        ) from exc
+
     try:
         join_request = await db.get_db().join_requests.find_one({
             '_id': ObjectId(join_request_id)
@@ -294,6 +309,17 @@ async def handle_join_request(
     join_request_id: str = Body(...), approval_status: bool = Body(...),
     current_user: UserModel = Depends(get_current_user)
 ):
+    try:
+        ObjectId(join_request_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid join request ID"
+        ) from exc
+    
+    if approval_status not in (True, False):
+      raise ValueError("Invalid approval status")
+
     try:
         join_request = await db.get_db().join_requests.find_one({
             '_id': ObjectId(join_request_id)
@@ -334,12 +360,21 @@ async def read_users_me(
     return current_user
 
 
-@router.post("/user/submitted-chat-rooms", response_model=list[ChatRoomShow])
+@router.post(
+        "/user/submitted-chat-rooms",
+        response_model=list[ChatRoomShow]
+)
 async def get_users_submitted_chat_rooms(
     current_user: UserModel = Depends(get_current_user),
     request: dict = Body(...)
 ):
-    is_group = request.get('is_group')
+    is_group = request.get('is_group', None)
+    if is_group not in (True, False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid is_group status"
+        )
+
     chat_rooms = await retrieve_users_chat_rooms(current_user.id, is_group)
 
     return chat_rooms
@@ -350,6 +385,9 @@ async def update_user_online_status(
     is_online: bool = Body(...),
     current_user: UserModel = Depends(get_current_user)
 ):
+    if is_online not in (True, False):
+      raise ValueError("Invalid user online status")
+    
     await update_user_online_status_db(current_user.id, is_online)
     
     return {"message": "User online status updated successfully"}
@@ -361,11 +399,16 @@ async def create_pv_chat_room(
     current_user: UserModel = Depends(get_current_user)
 ):
     addressed_users_id = request.get("addressed_users_id")
+    try:
+        ObjectId(addressed_users_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID"
+        ) from exc
+
     new_chat_room = await create_pv_chat(
         current_user.id, addressed_users_id
-    )
-    logger.info(
-        f"New pv chat created by: {current_user.email}"
     )
 
     return new_chat_room
@@ -376,21 +419,23 @@ async def chat_room_details(
     chat_room_id: str,
     _: UserModel = Depends(get_current_user)
 ):
-    chat_room = await get_chat_room(chat_room_id)
-    if not chat_room:
+    try:
+        ObjectId(chat_room_id)
+    except Exception as exc:
         raise HTTPException(
-            status_code=404, detail="Chat room not found"
-        )
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room ID"
+        ) from exc
+
+    chat_room = await get_chat_room(chat_room_id, True)
+    if not chat_room:
+        chat_room = await get_chat_room(chat_room_id, False)
+        if not chat_room:
+            raise HTTPException(
+                status_code=404, detail="Chat room not found"
+            )
     
     return chat_room
-
-
-@router.get("/rooms-online-users")
-async def get_rooms_online_users(
-    chat_room_id: str,
-    current_user: UserModel = Depends(get_current_user)
-):
-    return await rooms_online_users(current_user.id, chat_room_id)
 
 
 @router.get("/pv-online-users")

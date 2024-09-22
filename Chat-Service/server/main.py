@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 from database import db
 from inits_apis import router as inits_router
 from admin_apis import router as admin_router
@@ -19,6 +20,7 @@ async def lifespan(_: FastAPI):
     await db.close_db()
 
 
+load_dotenv()
 chat_service_app = FastAPI(lifespan=lifespan)
 chat_service_app.mount('/socket.io', app=sio_app)
 chat_service_app.mount(

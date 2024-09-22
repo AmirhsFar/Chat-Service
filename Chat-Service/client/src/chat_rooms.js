@@ -5,6 +5,7 @@ import { refreshToken } from './tokenUtils';
 export const ChatRooms = ({ onLogout }) => {
     const [groupChats, setGroupChats] = useState([]);
     const [privateChats, setPrivateChats] = useState([]);
+    const [onlineUsers, setOnlineUsers] = useState([]);
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
@@ -47,19 +48,49 @@ export const ChatRooms = ({ onLogout }) => {
         }
     }, [navigate, onLogout]);
 
+    const fetchOnlineUsers = useCallback(async () => {
+        try {
+            const newToken = await refreshToken();
+            if (!newToken) {
+                onLogout();
+                navigate('/login');
+                return;
+            }
+
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/pv-online-users`, {
+                headers: {
+                    'Authorization': `Bearer ${newToken}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            setOnlineUsers(data);
+        } catch (err) {
+            console.error('Error fetching online users:', err);
+            setError('Failed to fetch online users. Please try again.');
+        }
+    }, [navigate, onLogout]);
+
     useEffect(() => {
         fetchChatRooms();
+        fetchOnlineUsers();
 
         const refreshInterval = setInterval(async () => {
             const newToken = await refreshToken();
             if (!newToken) {
                 onLogout();
                 navigate('/login');
+            } else {
+                fetchOnlineUsers();
             }
         }, 5 * 60 * 1000); // Refresh every 5 minutes
 
         return () => clearInterval(refreshInterval);
-    }, [fetchChatRooms, navigate, onLogout]);
+    }, [fetchChatRooms, fetchOnlineUsers, navigate, onLogout]);
 
     const handleChatRoomClick = async (chatRoomId) => {
         const newToken = await refreshToken();
@@ -98,12 +129,26 @@ export const ChatRooms = ({ onLogout }) => {
     );
 
     return (
-        <div className="chat-rooms-container">
-            <h2>Your Chat Rooms</h2>
-            <button onClick={handleLogout}>Logout</button>
-            {error && <p className="error">{error}</p>}
-            {renderChatList(groupChats, "Group Chats")}
-            {renderChatList(privateChats, "Private Chats")}
+        <div className="chat-rooms-container" style={{ display: 'flex' }}>
+            <div style={{ flex: 3 }}>
+                <h2>Your Chat Rooms</h2>
+                <button onClick={handleLogout}>Logout</button>
+                {error && <p className="error">{error}</p>}
+                {renderChatList(groupChats, "Group Chats")}
+                {renderChatList(privateChats, "Private Chats")}
+            </div>
+            <div style={{ flex: 1, marginLeft: '20px', borderLeft: '1px solid #ccc', paddingLeft: '20px' }}>
+                <h3>Online Users in Private Chats</h3>
+                {onlineUsers.length > 0 ? (
+                    <ul>
+                        {onlineUsers.map((username, index) => (
+                            <li key={index}>{username}</li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p>No users online.</p>
+                )}
+            </div>
         </div>
     );
 };

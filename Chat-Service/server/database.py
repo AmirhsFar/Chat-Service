@@ -4,6 +4,7 @@ from pymongo.errors import ConnectionFailure
 
 logger = logging.getLogger(__name__)
 
+
 class Database:
     client: AsyncIOMotorClient | None = None
     db: AsyncIOMotorClient | None = None
@@ -31,5 +32,6 @@ class Database:
             raise ConnectionFailure("Database is not initialized. Call connect_db() first.")
         
         return cls.db
+
 
 db = Database()

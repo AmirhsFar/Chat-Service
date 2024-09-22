@@ -68,11 +68,7 @@ async def get_user_by_username(username: str) -> UserModel | None:
 
 
 async def get_user(user_id: str) -> UserShow | None:
-    try:
-        object_id = ObjectId(user_id)
-    except Exception as exc:
-        raise ValueError("Invalid user ID") from exc
-    user = await db.get_db().users.find_one({'_id': object_id})
+    user = await db.get_db().users.find_one({'_id': ObjectId(user_id)})
     if user:
 
         return UserShow(
@@ -188,6 +184,9 @@ async def delete_user(user_id: str) -> bool:
     await db.get_db().join_requests.delete_many({
         'user_id': ObjectId(user_id)
     })
+    await db.get_db().messages.delete_many({
+        'user_id': user_id
+    })
     result = await db.get_db().users.delete_one({'_id': ObjectId(user_id)})
 
     return result.deleted_count > 0
@@ -225,15 +224,10 @@ async def get_all_chat_rooms() -> list[ChatRoomShow]:
 async def get_chat_room(
         chat_room_id: str, is_group: bool | None = None
 ) -> ChatRoomShow | None:
-    if is_group:
-        chat_room = await db.get_db().chat_rooms.find_one({
-            '_id': ObjectId(chat_room_id),
-            'is_group': is_group
-        })
-    else:
-        chat_room = await db.get_db().chat_rooms.find_one({
-            '_id': ObjectId(chat_room_id)
-        })
+    chat_room = await db.get_db().chat_rooms.find_one({
+        '_id': ObjectId(chat_room_id),
+        'is_group': is_group
+    })
 
     if chat_room:
         user = await db.get_db().users.find_one({
@@ -264,8 +258,13 @@ async def update_chat_room(
     updated_chat_room = await db.get_db().chat_rooms.find_one({
         '_id': ObjectId(chat_room_id)
     })
+    updated_chat_room["_id"] = str(updated_chat_room["_id"])
+    owner = await db.get_db().users.find_one({
+        "_id": updated_chat_room["owner"]
+    })
+    updated_chat_room["owner"] = UserUpdate(**owner)
 
-    return updated_chat_room
+    return ChatRoomShow(**updated_chat_room)
 
 
 async def delete_chat_room(chat_room_id: str) -> bool:
@@ -274,6 +273,9 @@ async def delete_chat_room(chat_room_id: str) -> bool:
     })
     await db.get_db().join_requests.delete_many({
         'chat_room_id': ObjectId(chat_room_id)
+    })
+    await db.get_db().messages.delete_many({
+        'chat_room_id': chat_room_id
     })
     result = await db.get_db().chat_rooms.delete_one({
         '_id': ObjectId(chat_room_id)
@@ -290,7 +292,10 @@ async def create_join_request(
     try:
         requested_chat_rooms_id = ObjectId(join_req_dict["chat_room_id"])
     except Exception as exc:
-        raise ValueError("Invalid user ID") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room ID"
+        ) from exc
     
     users_chat_room = await db.get_db().chat_rooms.find_one({
         '_id': requested_chat_rooms_id,
@@ -524,7 +529,6 @@ async def handle_request(
     return {"status": statuss, "session": session}
 
 
-# This function should be the fastest by any means possible
 async def create_message(
         user_id: str, chat_room_id: str, username: str,
         content: str, message_type: MessageType,
@@ -664,7 +668,12 @@ async def update_user_online_status_db(user_id: str, is_online: bool):
         {"$set": {"is_online": is_online}}
     )
     if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
+        message = "User not found or has been "
+        message += "updated with the same status before"
+        raise HTTPException(
+            status_code=404,
+            detail=message
+        )
     
     return await db.get_db().users.find_one({"_id": ObjectId(user_id)})
 

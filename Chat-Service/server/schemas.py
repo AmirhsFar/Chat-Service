@@ -1,6 +1,6 @@
 from datetime import datetime
-from bson import ObjectId
 from enum import Enum
+from bson import ObjectId
 from pydantic import (
     BaseModel,
     EmailStr,

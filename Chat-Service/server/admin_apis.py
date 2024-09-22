@@ -1,7 +1,6 @@
 from fastapi import (
     APIRouter,
     Depends,
-    Body,
     HTTPException,
     status
 )
@@ -29,6 +28,7 @@ from operations import (
     get_messages, delete_all_messages
 )
 from inits_apis import get_current_user
+from bson import ObjectId
 
 router = APIRouter()
 
@@ -56,9 +56,20 @@ async def admin_get_all_users(
 async def admin_get_user(
     user_id: str, _: UserModel = Depends(get_current_admin_user)
 ):
+    try:
+        ObjectId(user_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID"
+        ) from exc
+    
     user = await get_user(user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     
     return user
 
@@ -93,25 +104,35 @@ async def admin_update_user(
     _: UserModel = Depends(get_current_admin_user)
 ):
     try:
-        updated_user = await update_user(
-            user_id, user_update.model_dump(exclude_unset=True)
-        )
+        ObjectId(user_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID"
+        ) from exc
+    
+    updated_user = await update_user(
+        user_id, user_update.model_dump(exclude_unset=True)
+    )
 
-        return updated_user
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    return updated_user
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def admin_delete_user(
     user_id: str, _: UserModel = Depends(get_current_admin_user)
-    ):
+):
     try:
-        deleted = await delete_user(user_id)
-        if not deleted:
-            raise HTTPException(status_code=404, detail="User not found")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        ObjectId(user_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user ID"
+        ) from exc
+
+    deleted = await delete_user(user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="User not found")
 
 
 @router.get("/chat-rooms", response_model=list[ChatRoomShow])
@@ -125,9 +146,19 @@ async def admin_get_all_chat_rooms(
 async def admin_get_chat_room(
     chat_room_id: str, _: UserModel = Depends(get_current_admin_user)
 ):
+    try:
+        ObjectId(chat_room_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room ID"
+        ) from exc
+
     chat_room = await get_chat_room(chat_room_id, is_group=True)
     if not chat_room:
-        raise HTTPException(status_code=404, detail="Chat room not found")
+        raise HTTPException(
+            status_code=404, detail="Chat room not found"
+        )
     
     return chat_room
 
@@ -139,6 +170,14 @@ async def admin_get_chat_room(
 async def admin_get_private_chat(
     private_chat_id: str, _: UserModel = Depends(get_current_admin_user)
 ):
+    try:
+        ObjectId(private_chat_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid private chat room ID"
+        ) from exc
+
     pv_chat = await get_chat_room(private_chat_id, is_group=False)
     if not pv_chat:
         raise HTTPException(
@@ -150,14 +189,19 @@ async def admin_get_private_chat(
 
 @router.post(
         "/chat-rooms",
-        response_model=ChatRoomShow,
         status_code=status.HTTP_201_CREATED
 )
 async def admin_create_chat_room(
-    chat_room: ChatRoomCreate,
-    is_group: bool = Body(...),
+    chat_room: ChatRoomUpdate,
+    is_group: bool,
     current_user: UserModel = Depends(get_current_admin_user)
 ):
+    if is_group not in (True, False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid is_group status"
+        )
+
     return await create_chat_room(chat_room, current_user.id, is_group)
 
 
@@ -168,14 +212,19 @@ async def admin_update_chat_room(
     _: UserModel = Depends(get_current_admin_user)
 ):
     try:
-        updated_chat_room = await update_chat_room(
-            chat_room_id,
-            chat_room_update.model_dump(exclude_unset=True)
-        )
+        ObjectId(chat_room_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room ID"
+        ) from exc
 
-        return updated_chat_room
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    updated_chat_room = await update_chat_room(
+        chat_room_id,
+        chat_room_update.model_dump(exclude_unset=True)
+    )
+
+    return updated_chat_room
 
 
 @router.delete(
@@ -185,6 +234,14 @@ async def admin_update_chat_room(
 async def admin_delete_chat_room(
     chat_room_id: str, _: UserModel = Depends(get_current_admin_user)
 ):
+    try:
+        ObjectId(chat_room_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room ID"
+        ) from exc
+
     deleted = await delete_chat_room(chat_room_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Chat room not found")
@@ -212,6 +269,14 @@ async def admin_delete_chat_room_session(
     chat_room_session_id: str,
     _: UserModel = Depends(get_current_admin_user)
 ):
+    try:
+        ObjectId(chat_room_session_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid chat room session ID"
+        ) from exc
+
     deleted = await delete_chat_room_session(chat_room_session_id)
     if not deleted:
         raise HTTPException(
@@ -226,6 +291,14 @@ async def admin_delete_chat_room_session(
 async def admin_delete_join_request(
     join_request_id: str, _: UserModel = Depends(get_current_admin_user)
 ):
+    try:
+        ObjectId(join_request_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid join request ID"
+        ) from exc
+    
     deleted = await delete_join_request(join_request_id)
     if not deleted:
         raise HTTPException(

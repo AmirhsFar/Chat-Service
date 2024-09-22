@@ -16,7 +16,8 @@ from operations import (
     get_user_by_email,
     update_chat_room_session_last_seen,
     update_chat_room_last_activity,
-    update_user_online_status_db
+    update_user_online_status_db,
+    rooms_online_users
 )
 from schemas import MessageType
 
@@ -60,19 +61,23 @@ async def connect(sid, environ, auth):
         user = await get_user_by_email(email)
         if not user:
             raise JWTError("User not found")
+        else:
+            user_id = str(user.id)
 
         await sio_server.save_session(sid, {
-            'user_id': str(user.id), 'email': email,
+            'user_id': user_id, 'email': email,
             'username': username, 'chat_room_id': chat_room_id
         })
-        await update_user_online_status_db(str(user.id), True)
+        await update_user_online_status_db(user_id, True)
         print(f'{username}: is connected')
         await sio_server.enter_room(sid, chat_room_id)
         await sio_server.emit(
             'join', {'username': username, 'email': email},
             room=chat_room_id
         )
+        online_users = await rooms_online_users(user_id, chat_room_id)
         recent_messages = await get_recent_messages(chat_room_id)
+        await sio_server.emit('online_users', online_users, to=sid)
         await sio_server.emit('initial_messages', [
             message.dict_with_iso_timestamp() for message in recent_messages
         ], to=sid)
@@ -127,10 +132,14 @@ async def disconnect(sid):
     session = await sio_server.get_session(sid)
     user_id = session.get('user_id')
     chat_room_id = session.get('chat_room_id')
+    username = session['username']
 
     if user_id and chat_room_id:
         await update_user_online_status_db(user_id, False)
         await update_chat_room_session_last_seen(user_id, chat_room_id)
         await sio_server.leave_room(sid, chat_room_id)
+        await sio_server.emit(
+            'leave', {'username': username}, room=chat_room_id
+        )
     
     print(f'{session["username"]}: is disconnected')
