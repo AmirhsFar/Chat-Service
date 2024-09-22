@@ -38,7 +38,12 @@ from operations import (
     get_chat_room_details,
     delete_chat_room,
     get_join_request,
-    handle_request
+    handle_request,
+    retrieve_users_chat_rooms,
+    update_user_online_status_db,
+    create_pv_chat,
+    rooms_online_users,
+    get_online_users_pv
 )
 from utils import (
     verify_password,
@@ -46,7 +51,6 @@ from utils import (
     SECRET_KEY,
     ALGORITHM
 )
-# from redis_config import get_redis
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -55,17 +59,13 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
-    # redis = await get_redis()
-    # is_blacklisted = await redis.get(f"blacklisted_token:{token}")
-    # if is_blacklisted:
-    #     raise credentials_exception
     
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -81,6 +81,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     
     return user
+
 
 @router.post(
         "/signup",
@@ -113,12 +114,7 @@ async def signup(user: UserCreate):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         ) from e
-    # except Exception as e:
-    #     logger.error(f"Unexpected error during signup: {str(e)}")
-    #     raise HTTPException(
-    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #         detail="An unexpected error occurred"
-    #     ) from e
+
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
@@ -139,19 +135,22 @@ async def login_for_access_token(
 
     return {"access_token": access_token, "token_type": "bearer"}
 
-# @router.post("/logout")
-# async def logout(
-#     current_user: UserModel = Depends(get_current_user),
-#     token: str = Depends(oauth2_scheme)
-# ):
-#     redis = await get_redis()
-#     await redis.set(
-#         f"blacklisted_token:{token}", "true",
-#         ex=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-#     )
-#     logger.info(f"User logged out: {current_user.email}")
 
-#     return {"message": "Successfully logged out"}
+@router.post("/refresh-token", response_model=Token)
+async def refresh_access_token(
+    current_user: UserModel = Depends(get_current_user)
+):
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={
+            "email": current_user.email,
+            "username": current_user.username
+        },
+        expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
 
 @router.post("/chat-rooms")
 async def create_new_chat_room(
@@ -159,7 +158,7 @@ async def create_new_chat_room(
     current_user: UserModel = Depends(get_current_user)
 ):
     try:
-        new_chat_room = await create_chat_room(chat_room, current_user.id)
+        new_chat_room = await create_chat_room(chat_room, current_user.id, True)
         chat_room_dict = chat_room.model_dump()
         logger.info(
             f"New chat room created: {chat_room_dict['name']} by user: {current_user.email}"
@@ -173,6 +172,7 @@ async def create_new_chat_room(
             detail="An error occurred while creating the chat room"
         ) from e
 
+
 @router.get("/chat-rooms", response_model=list[ChatRoomShow])
 async def get_my_chat_rooms(current_user: UserModel = Depends(get_current_user)):
     try:
@@ -185,6 +185,7 @@ async def get_my_chat_rooms(current_user: UserModel = Depends(get_current_user))
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while fetching chat rooms"
         ) from e
+
 
 @router.get(
         "/search-chat-rooms",
@@ -201,6 +202,7 @@ async def search_chat_rooms(
     
     return chat_room
 
+
 @router.post("/join-request", response_model=JoinRequestShow)
 async def submit_join_request(
     join_request: JoinRequestCreate,
@@ -214,6 +216,7 @@ async def submit_join_request(
     )
 
     return new_join_request
+
 
 @router.get('/chat-room-details')
 async def my_chat_room_details(
@@ -229,6 +232,7 @@ async def my_chat_room_details(
         )
     
     return await get_chat_room_details(chat_room_id)
+
 
 @router.delete('/delete-chat-room', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_my_chat_room(
@@ -251,6 +255,7 @@ async def delete_my_chat_room(
         raise HTTPException(
             status_code=404, detail="Chat room not found"
         )
+
 
 @router.get('/join-request-details', response_model=JoinRequestShow)
 async def get_join_request_details(
@@ -282,6 +287,7 @@ async def get_join_request_details(
         )
 
     return await get_join_request(join_request_id)
+
 
 @router.post('/handle-join-request')
 async def handle_join_request(
@@ -319,3 +325,76 @@ async def handle_join_request(
         )
 
     return await handle_request(join_request_id, approval_status)
+
+
+@router.get('/users/me', response_model=UserModel)
+async def read_users_me(
+    current_user: UserModel = Depends(get_current_user)
+):
+    return current_user
+
+
+@router.post("/user/submitted-chat-rooms", response_model=list[ChatRoomShow])
+async def get_users_submitted_chat_rooms(
+    current_user: UserModel = Depends(get_current_user),
+    request: dict = Body(...)
+):
+    is_group = request.get('is_group')
+    chat_rooms = await retrieve_users_chat_rooms(current_user.id, is_group)
+
+    return chat_rooms
+
+
+@router.put("/user/online-status")
+async def update_user_online_status(
+    is_online: bool = Body(...),
+    current_user: UserModel = Depends(get_current_user)
+):
+    await update_user_online_status_db(current_user.id, is_online)
+    
+    return {"message": "User online status updated successfully"}
+
+
+@router.post("/pv-chat-room")
+async def create_pv_chat_room(
+    request: dict = Body(...),
+    current_user: UserModel = Depends(get_current_user)
+):
+    addressed_users_id = request.get("addressed_users_id")
+    new_chat_room = await create_pv_chat(
+        current_user.id, addressed_users_id
+    )
+    logger.info(
+        f"New pv chat created by: {current_user.email}"
+    )
+
+    return new_chat_room
+
+
+@router.get("/chat-room/{chat_room_id}", response_model=ChatRoomShow)
+async def chat_room_details(
+    chat_room_id: str,
+    _: UserModel = Depends(get_current_user)
+):
+    chat_room = await get_chat_room(chat_room_id)
+    if not chat_room:
+        raise HTTPException(
+            status_code=404, detail="Chat room not found"
+        )
+    
+    return chat_room
+
+
+@router.get("/rooms-online-users")
+async def get_rooms_online_users(
+    chat_room_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    return await rooms_online_users(current_user.id, chat_room_id)
+
+
+@router.get("/pv-online-users")
+async def get_pv_chats_online_users(
+    current_user: UserModel = Depends(get_current_user)
+):
+    return await get_online_users_pv(current_user.id)

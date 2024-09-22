@@ -1,5 +1,6 @@
 from datetime import datetime
 from bson import ObjectId
+from enum import Enum
 from pydantic import (
     BaseModel,
     EmailStr,
@@ -250,3 +251,28 @@ class ChatRoomSessionShow(BaseModel):
                 }
             }
         }
+
+
+class MessageType(str, Enum):
+    TEXT = "text"
+    IMAGE = "image"
+    FILE = "file"
+
+
+class MessageModel(BaseModel):
+    id: str
+    user_id: str
+    chat_room_id: str
+    username: str
+    content: str
+    timestamp: datetime
+    message_type: MessageType
+    file_name: str | None = None
+    file_path: str | None = None
+
+    def dict_with_iso_timestamp(self):
+        d = self.model_dump()
+        d['timestamp'] = d['timestamp'].isoformat()
+        d['message_type'] = d['message_type'].value
+        
+        return d

@@ -1,6 +1,7 @@
 from fastapi import (
     APIRouter,
     Depends,
+    Body,
     HTTPException,
     status
 )
@@ -13,7 +14,8 @@ from schemas import (
     ChatRoomShow,
     ChatRoomUpdate,
     JoinRequestShow,
-    ChatRoomSessionShow
+    ChatRoomSessionShow,
+    MessageModel
 )
 from operations import (
     get_user_by_username, get_user_by_email,
@@ -23,11 +25,13 @@ from operations import (
     get_chat_room, create_chat_room,
     update_chat_room, delete_chat_room,
     get_all_join_requests, get_all_chat_room_sessions,
-    delete_join_request, delete_chat_room_session
+    delete_join_request, delete_chat_room_session,
+    get_messages, delete_all_messages
 )
 from inits_apis import get_current_user
 
 router = APIRouter()
+
 
 async def get_current_admin_user(
         current_user: UserModel = Depends(get_current_user)
@@ -40,11 +44,13 @@ async def get_current_admin_user(
     
     return current_user
 
+
 @router.get("/users", response_model=list[UserShow])
 async def admin_get_all_users(
     _: UserModel = Depends(get_current_admin_user)
 ):
     return await get_all_users()
+
 
 @router.get("/users/{user_id}", response_model=UserShow)
 async def admin_get_user(
@@ -55,6 +61,7 @@ async def admin_get_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     return user
+
 
 @router.post(
         "/users", response_model=UserShow,
@@ -78,6 +85,7 @@ async def admin_create_user(
     
     return await create_user(user)
 
+
 @router.patch("/users/{user_id}", response_model=UserShow)
 async def admin_update_user(
     user_id: str,
@@ -93,6 +101,7 @@ async def admin_update_user(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
+
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def admin_delete_user(
     user_id: str, _: UserModel = Depends(get_current_admin_user)
@@ -104,11 +113,13 @@ async def admin_delete_user(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+
 @router.get("/chat-rooms", response_model=list[ChatRoomShow])
 async def admin_get_all_chat_rooms(
     _: UserModel = Depends(get_current_admin_user)
 ):
     return await get_all_chat_rooms()
+
 
 @router.get("/chat-rooms/{chat_room_id}", response_model=ChatRoomShow)
 async def admin_get_chat_room(
@@ -119,6 +130,7 @@ async def admin_get_chat_room(
         raise HTTPException(status_code=404, detail="Chat room not found")
     
     return chat_room
+
 
 @router.get(
         "/chat-rooms/private/{private_chat_id}",
@@ -135,6 +147,7 @@ async def admin_get_private_chat(
     
     return pv_chat
 
+
 @router.post(
         "/chat-rooms",
         response_model=ChatRoomShow,
@@ -142,9 +155,11 @@ async def admin_get_private_chat(
 )
 async def admin_create_chat_room(
     chat_room: ChatRoomCreate,
+    is_group: bool = Body(...),
     current_user: UserModel = Depends(get_current_admin_user)
 ):
-    return await create_chat_room(chat_room, current_user.id)
+    return await create_chat_room(chat_room, current_user.id, is_group)
+
 
 @router.patch("/chat-rooms/{chat_room_id}", response_model=ChatRoomShow)
 async def admin_update_chat_room(
@@ -162,6 +177,7 @@ async def admin_update_chat_room(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
+
 @router.delete(
         "/chat-rooms/{chat_room_id}",
         status_code=status.HTTP_204_NO_CONTENT
@@ -173,17 +189,20 @@ async def admin_delete_chat_room(
     if not deleted:
         raise HTTPException(status_code=404, detail="Chat room not found")
 
+
 @router.get("/join-requests", response_model=list[JoinRequestShow])
 async def admin_get_all_join_requests(
     _: UserModel = Depends(get_current_admin_user)
 ):
     return await get_all_join_requests()
 
+
 @router.get("/chat-room-sessions", response_model=list[ChatRoomSessionShow])
 async def admin_get_all_chat_room_sessions(
     _: UserModel = Depends(get_current_admin_user)
 ):
     return await get_all_chat_room_sessions()
+
 
 @router.delete(
         "/chat-room-sessions/{chat_room_session_id}",
@@ -199,6 +218,7 @@ async def admin_delete_chat_room_session(
             status_code=404, detail="Chat room session not found"
         )
 
+
 @router.delete(
         "/join-requests/{join_request_id}",
         status_code=status.HTTP_204_NO_CONTENT
@@ -211,3 +231,23 @@ async def admin_delete_join_request(
         raise HTTPException(
             status_code=404, detail="Join request not found"
         )
+
+
+@router.get('/messages', response_model=list[MessageModel])
+async def read_messages(
+    skip: int = 0, limit: int = 100,
+    _: UserModel = Depends(get_current_user)
+):
+    messages = await get_messages(skip=skip, limit=limit)
+
+    return messages
+
+
+@router.delete("/clear_messages")
+async def clear_messages(_: UserModel = Depends(get_current_user)):
+    deleted_count = await delete_all_messages()
+    if deleted_count > 0:
+
+        return {"message": f"Deleted {deleted_count} messages"}
+    else:
+        raise HTTPException(status_code=404, detail="No messages found")

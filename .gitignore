@@ -161,6 +161,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# installed packages of Node.js in the socket.io test section
+# installed packages of Node.js in the socket.io test sections
+Chat-Service/client/node_modules/
 FastAPI-Learning/socketio/client/node_modules/
 FastAPI-Learning/mongodb_app/client/node_modules/
