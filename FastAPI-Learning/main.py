@@ -750,7 +750,7 @@ async def read_items(item_id: int):
         status_code=status.HTTP_201_CREATED,
         tags=[Tags.items],
         summary='Create an Item',
-        response_description='The created item'
+        response_description='The created item',
         # description='''Create an Item with all the information: 
         #                     name, description, price, tax, and a set of tags'''
     )

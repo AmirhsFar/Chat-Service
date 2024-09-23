@@ -7,7 +7,6 @@ from fastapi import (
 from schemas import (
     UserModel,
     UserCreate,
-    ChatRoomCreate,
     UserShow,
     UserUpdate,
     ChatRoomShow,
