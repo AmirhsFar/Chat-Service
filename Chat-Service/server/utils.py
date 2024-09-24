@@ -4,7 +4,8 @@ utils.py
 This module handles the security and authentication utilities for the 
 FastAPI project, including password hashing, password verification, 
 and JWT token creation. It uses the secret key from the corresponding 
-environment variable to configure settings for JWT token generation.
+environment (or the corresponding Docker secret) variable to configure 
+settings for JWT token generation.
 
 Functions:
     verify_password: Verifies a plain text password against a hashed password.
@@ -29,6 +30,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 load_dotenv()
 SECRET_KEY = os.environ.get("SECRET_KEY")
 ALGORITHM = "HS256"
+
+if SECRET_KEY is None:
+    with open("/run/secrets/secret_key", "r", encoding="utf-8") as f:
+        SECRET_KEY = f.read().strip()
 
 if SECRET_KEY is None:
     raise ValueError("SECRET_KEY not found in environment variables")

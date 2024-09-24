@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # FastAPI Service
+  fastapi:
+    container_name: fastapi_server
+    build:
+      context: ./Chat-Service/server
+      dockerfile: Dockerfile
+    environment:
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+      - MONGO_USER_FILE=/run/secrets/mongo_user
+      - MONGO_PASSWORD_FILE=/run/secrets/mongo_password
+      - MONGO_HOST=mongo
+      - MONGO_PORT=27017
+      - MONGO_DB=chat_service
+    secrets:
+      - secret_key
+      - mongo_user
+      - mongo_password
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Chat-Service/server:/app
+    depends_on:
+      - mongo
+
+  # Node.js Service
+  nodejs:
+    container_name: nodejs_server
+    build:
+      context: ./Chat-Service/client
+      dockerfile: Dockerfile.client
+    environment:
+      - REACT_APP_API_URL=http://127.0.0.1:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./Chat-Service/client:/usr/src/app
+    depends_on:
+      - fastapi
+
+  # MongoDB Service
+  mongo:
+    image: mongo:7.0
+    container_name: mongo_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+secrets:
+  mongo_password:
+    file: ./secrets/mongo_password
+  secret_key:
+    file: ./secrets/secret_key
+
+volumes:
+  mongo-data:

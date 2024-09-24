@@ -1,0 +1,17 @@
+# Node.js Dockerfile
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /usr/src/app
+
+# Copy the frontend files
+COPY . .
+
+# Install dependencies
+RUN npm install
+
+# Expose port 3000 for the Node.js app
+EXPOSE 3000
+
+# Command to run the Node.js server
+CMD ["npm", "start"]

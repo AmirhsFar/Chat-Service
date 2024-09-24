@@ -61,6 +61,7 @@ async def lifespan(_: FastAPI):
     yield
     await db.close_db()
 
+
 APPS_DESCRIPTION = "The `Chat Service App` is a high-performance real-time "
 APPS_DESCRIPTION += "messaging platform built using `FastAPI`, `Socket.io`, "
 APPS_DESCRIPTION += "and `MongoDB`.\n\n It provides a robust and feature-rich "
