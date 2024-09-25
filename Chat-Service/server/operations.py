@@ -1245,8 +1245,9 @@ async def create_pv_chat(
             - 'addresseds_session': The chat session for the addressed user.
 
     Raises:
-        HTTPException: If the requester tries to create a chat with themselves,
-            or if a private chat session already exists between the two users.
+        HTTPException: If the requester tries to create a chat with 
+            themselves, or if a private chat session already exists between 
+            the two users.
     """
     if requester_user_id == addressed_user_id:
         exc_message = "You cannot create a private "
