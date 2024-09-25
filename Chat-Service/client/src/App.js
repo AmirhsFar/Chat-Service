@@ -19,7 +19,7 @@ function App() {
     return (
         <Router>
             <div>
-                <h1>Socket.io Chat App</h1>
+                <h1>Chat Service</h1>
                 <Routes>
                     <Route path="/login" element={
                         isLoggedIn ? <Navigate to="/chat-rooms" /> : <Login onLogin={handleLogin} />

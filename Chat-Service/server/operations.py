@@ -1165,6 +1165,43 @@ async def update_chat_room_last_activity(chat_room_id, timestamp):
     )
 
 
+async def check_pv_chat_existance(
+        requester_user_id: str, addressed_user_id: str
+) -> bool:
+    rq_chat_room_sessions = await db.get_db().chat_room_sessions.find({
+        "user_id": ObjectId(requester_user_id)
+    }).to_list(None)
+    if not rq_chat_room_sessions:
+        
+        return False
+    ad_chat_room_sessions = await db.get_db().chat_room_sessions.find({
+        "user_id": ObjectId(addressed_user_id)
+    }).to_list(None)
+    if not ad_chat_room_sessions:
+
+        return False
+    
+    for rq_session in rq_chat_room_sessions:
+        rq_chat_room = await db.get_db().chat_rooms.find_one({
+            "_id": rq_session["chat_room_id"],
+            "is_group": False
+        })
+        if rq_chat_room:
+            rq_chat_room_id = str(rq_chat_room["_id"])
+            for ad_session in ad_chat_room_sessions:
+                ad_chat_room = await db.get_db().chat_rooms.find_one({
+                    "_id": ad_session["chat_room_id"],
+                    "is_group": False
+                })
+                if ad_chat_room:
+                    ad_chat_room_id = str(ad_chat_room["_id"])
+                    if rq_chat_room_id == ad_chat_room_id:
+
+                        return True
+    
+    return False
+
+
 async def create_pv_chat(
     requester_user_id: str, addressed_user_id: str
 ) -> dict:
@@ -1187,6 +1224,23 @@ async def create_pv_chat(
             - 'requesters_session': The chat session for the requester.
             - 'addresseds_session': The chat session for the addressed user.
     """
+    if requester_user_id == addressed_user_id:
+        exc_message = "You cannot create a private "
+        exc_message += "chat session with yourself!"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=exc_message
+        )
+    mutual_pv_exists = await check_pv_chat_existance(
+        requester_user_id, addressed_user_id
+    )
+    if mutual_pv_exists:
+        exc_message = "You already have a private chat session "
+        exc_message += "with the associated user"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc_message
+        )
     requester = await db.get_db().users.find_one({
         "_id": ObjectId(requester_user_id)
     })
