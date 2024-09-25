@@ -1,0 +1,18 @@
+APPS_DESCRIPTION: The `Chat Service App` is a high-performance real-time messaging platform built using `FastAPI`, `Socket.io`, and `MongoDB`.
+
+It provides a robust and feature-rich environment for users to engage in both **group chats** and **private chats** with seamless real-time communication.
+
+### **Key Features:**
+- **Real-Time Messaging:** Enjoy high-speed messaging powered by `FastAPI` and `Socket.io`, ensuring a responsive and real-time chat experience for all users.
+- **Group Chat:** Users can create chat rooms, invite others, and manage join requests. Only after the room owner approves a request can users participate in group conversations.
+- **Private Chat:** Users can initiate private one-on-one chats by selecting another user's username from a group chat session, creating a private room for more personal communication.
+- **Online Users:** View the list of online users in real-time, both in the *Your Chat Rooms* page and within each chat room.
+- **Admin Panel:** Includes a powerful admin panel that allows admin users to perform full **CRUD operations** on database resources, giving administrators complete control over users, chat rooms, join requests, and other database schemas.
+
+Backed by the flexibility and performance of `FastAPI`, the real-time capabilities of `Socket.io`, and the scalability of `MongoDB`, the Chat Service App delivers a smooth and feature-rich chat experience that can handle a wide range of use cases, from casual group chats to more private, one-on-one messaging.
+
+
+INITS_DESCRIPTION: This set of APIs handles user management, authentication, and chat room operations within the chat service system. It provides functionalities such as user sign-up, login, managing chat rooms, and handling join requests.
+
+
+ADMIN_DESCRIPTION: This set of APIs provides CRUD operations on database schemas for an admin panel. By using these APIs, the admin user can manage database instances easily.

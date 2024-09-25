@@ -1296,3 +1296,36 @@ async def rooms_online_users(user_id: str, chat_room_id: str) -> list:
                 usernames.append(user["username"])
 
     return usernames
+
+
+def load_descriptions(file_path):
+    """
+    Loads application descriptions from a text file and returns them as a dictionary.
+
+    The text file is expected to contain multiple sections, each starting with a key 
+    (such as 'APPS_DESCRIPTION', 'INITS_DESCRIPTION', 'ADMIN_DESCRIPTION') followed 
+    by a colon and a space, and then the corresponding description text. Each section 
+    is separated by two newlines.
+
+    Args:
+        file_path (str): The path to the text file containing the descriptions.
+
+    Returns:
+        dict: A dictionary with keys as the description titles (e.g., 'APPS_DESCRIPTION') 
+              and values as the corresponding description text.
+    """
+    descriptions = {}
+    with open(file_path, 'r', encoding="utf-8") as f:
+        content = f.read().strip()
+        sections = content.split('\n\n\n')
+        for section in sections:
+            try:
+                key, value = section.split(': ', 1)
+                descriptions[key] = value
+            except ValueError as exc:
+                print(f"Error parsing section: {section}")
+                raise ValueError(
+                    "Descriptions file is not formatted correctly."
+                ) from exc
+    
+    return descriptions

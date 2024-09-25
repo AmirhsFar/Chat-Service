@@ -28,6 +28,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from database import db
+from operations import load_descriptions
 from inits_apis import router as inits_router
 from admin_apis import router as admin_router
 from sockets import sio_app
@@ -62,60 +63,23 @@ async def lifespan(_: FastAPI):
     await db.close_db()
 
 
-APPS_DESCRIPTION = "The `Chat Service App` is a high-performance real-time "
-APPS_DESCRIPTION += "messaging platform built using `FastAPI`, `Socket.io`, "
-APPS_DESCRIPTION += "and `MongoDB`.\n\n It provides a robust and feature-rich "
-APPS_DESCRIPTION += "environment for users to engage in both **group chats** "
-APPS_DESCRIPTION += "and **private chats** with seamless real-time communication."
-APPS_DESCRIPTION += "\n\n### **Key Features:**\n\n- **Real-Time Messaging**:\n\n"
-APPS_DESCRIPTION += "Enjoy high-speed messaging powered by `FastAPI` and "
-APPS_DESCRIPTION += "`Socket.io`, ensuring a responsive and real-time chat experience "
-APPS_DESCRIPTION += "for all users.\n\n- **Group Chat**:\n\nUsers can create chat "
-APPS_DESCRIPTION += "rooms, invite others, and manage join requests. Only after the "
-APPS_DESCRIPTION += "room owner approves a request can users participate in group "
-APPS_DESCRIPTION += "conversations.\n\n- **Private Chat**:\n\nUsers can initiate "
-APPS_DESCRIPTION += "private one-on-one chats by simply selecting another user's "
-APPS_DESCRIPTION += "username from a group chat session, creating a private room "
-APPS_DESCRIPTION += "for more personal communication.\n\n- **Online Users**:\n\n"
-APPS_DESCRIPTION += "View the list of online users in real-time, both in the "
-APPS_DESCRIPTION += "*Your Chat Rooms* page and within each chat room, making "
-APPS_DESCRIPTION += "it easy to see who's available to chat.\n\n- **Admin Panel**:"
-APPS_DESCRIPTION += "\n\nIncludes a powerful admin panel that allows admin users "
-APPS_DESCRIPTION += "to perform full **CRUD operations** on database resources, "
-APPS_DESCRIPTION += "giving administrators complete control over users, chat rooms, "
-APPS_DESCRIPTION += "join requests and other database schemas.\n\n"
-APPS_DESCRIPTION += "\n\nBacked by the flexibility and performance of `FastAPI`, "
-APPS_DESCRIPTION += "the real-time capabilities of `Socket.io`, and the scalability "
-APPS_DESCRIPTION += "of `MongoDB`, the Chat Service App delivers a smooth and "
-APPS_DESCRIPTION += "feature-rich chat experience that can handle a wide range of "
-APPS_DESCRIPTION += "use cases, from casual group chats to more private, "
-APPS_DESCRIPTION += "one-on-one messaging."
-
-INITS_DESCRIPTION = "This set of APIs handle user management, "
-INITS_DESCRIPTION += "authentication, and chat room operations within "
-INITS_DESCRIPTION += "the chat service system. They handles a wide range "
-INITS_DESCRIPTION += "of functionalities, including user sign-up, login, "
-INITS_DESCRIPTION += "managing chat rooms, handling join requests, and more."
-
-ADMIN_DESCRIPTION = "This set of APIs provide CRUD operations on database "
-ADMIN_DESCRIPTION += "schemas for an admin panel. By using these APIs, "
-ADMIN_DESCRIPTION += "the admin user can manage database instances easily."
+descriptions = load_descriptions('descriptions.txt')
 
 tags_metadata = [
     {
         'name': 'inits',
-        'description': INITS_DESCRIPTION
+        'description': descriptions['INITS_DESCRIPTION']
     },
     {
         'name': 'admin panel',
-        'description': ADMIN_DESCRIPTION
+        'description': descriptions['ADMIN_DESCRIPTION']
     }
 ]
 
 
 chat_service_app = FastAPI(
     title="Chat Service App",
-    description=APPS_DESCRIPTION,
+    description=descriptions['APPS_DESCRIPTION'],
     version='1.0.0',
     contact={
         'name':'Amirhossein Farahani',
