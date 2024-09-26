@@ -144,8 +144,8 @@ Ensure that you have Docker and Docker Compose installed. You can download Docke
 
 ## Step 2: Clone the Repository
   ```bash
-  git clone https://github.com/your-username/your-repository.git
-  cd your-repository
+  git clone https://github.com/AmirhsFar/danesh-sazan-internship-tasks.git
+  cd danesh-sazan-internship-tasks
   ```
 
 ### Step 3: Prepare Docker Secrets
