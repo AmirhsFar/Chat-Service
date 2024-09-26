@@ -64,6 +64,18 @@ services:
       - fastapi
       - nodejs
 
+  # Nginx Service
+  nginx:
+    build:
+      context: ./Chat-Service/nginx
+      dockerfile: Dockerfile.nginx
+    container_name: nginx_proxy
+    ports:
+      - "80:80"
+    depends_on:
+      - fastapi
+      - nodejs
+
 secrets:
   mongo_password:
     file: ./secrets/mongo_password
